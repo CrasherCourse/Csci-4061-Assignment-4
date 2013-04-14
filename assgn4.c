@@ -26,17 +26,25 @@
 #include <time.h>
 #define NAMESIZE 256
 #define NUM_THREADS 100
-
+#define DEBUG	
 // This a recursive function to process the thing
-int traverseDirectory(char * dirPath, char * dirName)
+
+typedef struct tData
+{
+	int parentSize;
+	char * childName;
+} tData;
+
+int traverseDirectory(char * dirName)
 {
 	DIR * dir;
 	struct dirent *dir_entry;
 	struct stat fileStat;
-	char * tempPath, *tempName;
+	char *entryName;
 	int size = 0;
 	
-	if( (dir = opendir(dirPath)) == NULL)
+	
+	if( (dir = opendir(dirName)) == NULL)
 	{
 		perror("opendir: ");
 		exit(1);
@@ -44,9 +52,14 @@ int traverseDirectory(char * dirPath, char * dirName)
 	
 	while( (dir_entry = readdir(dir)) != NULL)
 	{
+		entryName = (char *) malloc(NAMESIZE * sizeof(char));
+		strcpy(entryName, dirName);
+		strcat(entryName, "/");
+		strcat(entryName, dir_entry->d_name);
+		
 		if((strcmp(dir_entry->d_name, ".") == 0) ||				// ignore current and parent directory
 			(strcmp(dir_entry->d_name, "..") == 0))	continue;
-		if((lstat(dir_entry->d_name, &fileStat)) == -1)
+		if((lstat(entryName, &fileStat)) == -1)
 		{
 			perror("lstat: ");
 		}
@@ -57,29 +70,70 @@ int traverseDirectory(char * dirPath, char * dirName)
 		}
 		else if(S_ISDIR(fileStat.st_mode))
 		{
-			tempName = (char *) malloc(NAMESIZE * sizeof(char));
-			tempPath = (char *) malloc(NAMESIZE * sizeof(char));
-			strcpy(tempName, dirName);
-			strcat(tempName, "/");
-			strcat(tempName, dir_entry->d_name);
-			strcpy(tempPath, dirPath);
-			strcat(tempPath, "/");
-			strcat(tempPath, dir_entry->d_name);
-			size += traverseDirectory(tempPath, tempName);
+			size += traverseDirectory(entryName);
 		}
-		
+	}
+	#ifdef DEBUG
+	printf("DEBUG: %s/ %d\n", dirName, size);
+	#endif
+	return size;
+}
+
+void * travDirThread(void * input)
+{
+	DIR * dir;
+	struct dirent *dir_entry;
+	struct stat fileStat;
+	char *entryName, *dirName;
+	int size = 0;
+	pthread_t tid;
+	
+
+	dirName = (char *) input;
+	entryName = (char *) malloc(NAMESIZE * sizeof(char));
+	strcpy(entryName, dirName);
+	if( (dir = opendir(dirName)) == NULL)
+	{
+		perror("opendir: ");
+		exit(1);
 	}
 	
+	while( (dir_entry = readdir(dir)) != NULL)
+	{
+		entryName = (char *) malloc(NAMESIZE * sizeof(char));
+		strcpy(entryName, dirName);
+		strcat(entryName, "/");
+		strcat(entryName, dir_entry->d_name);
+		
+		if((strcmp(dir_entry->d_name, ".") == 0) ||				// ignore current and parent directory
+			(strcmp(dir_entry->d_name, "..") == 0))	continue;
+		if((lstat(entryName, &fileStat)) == -1)
+		{
+			perror("lstat: ");
+		}
+		
+		if(S_ISREG(fileStat.st_mode))				// Add size of regular file to diretory size
+		{
+			size += fileStat.st_size;
+		}
+		else if(S_ISDIR(fileStat.st_mode))
+		{
+			//size += traverseDirectory(entryName);
+		}
+	}
+	#ifdef DEBUG
 	printf("DEBUG: %s/ %d\n", dirName, size);
-	return size;
-	
+	#endif
+	pthread_exit((void *) size);
 }
 
 int main(int argc, char *argv[])
 {
 	char *input_dir_name, *mydirpath, *chptr;
-    	struct stat statbuf;
+    struct stat statbuf;
 	int totalSize;
+	pthread_t tid;
+	void * status;
 
 	input_dir_name = (char *) malloc(NAMESIZE * sizeof(char));
 	mydirpath = (char *) malloc(NAMESIZE * sizeof(char));
@@ -95,18 +149,19 @@ int main(int argc, char *argv[])
 	    strcpy(chptr,"\0");
 	}
 	strcat(mydirpath,input_dir_name);
-    	lstat(mydirpath,&statbuf);
+    lstat(mydirpath,&statbuf);
 	if(!(S_ISDIR(statbuf.st_mode))){
 		printf("\nThe directory name is not valid. Directory does not exist\n");
 		exit(1);
 	}
 	
 	/****************************************************************************/
-	totalSize = traverseDirectory(mydirpath, input_dir_name);
+	pthread_create(&tid, NULL, travDirThread, (void *) input_dir_name);
+	pthread_join(tid, status);
+	totalSize = 0;
 	printf("\nTotal Size: %d\n", totalSize);
 
 	free(input_dir_name);
 	free(mydirpath);
 	return 0;
 }
-
