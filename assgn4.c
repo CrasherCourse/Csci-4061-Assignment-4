@@ -34,16 +34,19 @@ typedef struct tData
 	char * childName;
 } tData;
 
-void traverseDirectory(void * input)
+void * traverseDirectory(void * input)
 {
 	DIR * dir;
-	struct dirent *dir_entry;
+	struct dirent *dirEntry;
 	struct stat fileStat;
 	char *entryName;
 	tData *parData, myData;
-	myData.parentSize = 0;
+	pthread_t tid;
+	
+	myData.parentSize = 0;		// initilize myData
 	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	parData = (tData *) input;
+	entryName = (char *) malloc(NAMESIZE * sizeof(char));
 
 	printf("%s\n", parData->childName);
 	if( (dir = opendir(parData->childName)) == NULL)
@@ -52,15 +55,15 @@ void traverseDirectory(void * input)
 		exit(1);
 	}
 	
-	while( (dir_entry = readdir(dir)) != NULL)
+	while( (dirEntry = readdir(dir)) != NULL)
 	{
-		entryName = (char *) malloc(NAMESIZE * sizeof(char));
+
 		strcpy(entryName, parData->childName);
 		strcat(entryName, "/");
-		strcat(entryName, dir_entry->d_name);
+		strcat(entryName, dirEntry->d_name);
 		
-		if((strcmp(dir_entry->d_name, ".") == 0) ||				// ignore current and parent directory
-			(strcmp(dir_entry->d_name, "..") == 0))	continue;
+		if((strcmp(dirEntry->d_name, ".") == 0) ||				// ignore current and parent directory
+			(strcmp(dirEntry->d_name, "..") == 0))	continue;
 		if((lstat(entryName, &fileStat)) == -1)
 		{
 			perror("lstat: ");
@@ -72,15 +75,15 @@ void traverseDirectory(void * input)
 		}
 		else if(S_ISDIR(fileStat.st_mode))
 		{
-			strcpy(myData.childName, entryName);
-			traverseDirectory((void *) &myData);
+			pthread_create(&tid, NULL, traverseDirectory, ((void *) &myData));
+			pthread_join(tid, NULL);
 		}
 	}
 	#ifdef DEBUG
 	printf("DEBUG: %s/ %d\n", parData->childName, myData.parentSize);
 	#endif
 	parData->parentSize += myData.parentSize;
-	return;
+	pthread_exit((void *) result);
 }
 
 int main(int argc, char *argv[])
@@ -111,10 +114,13 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	/****************************************************************************/
+	// Initialize tData for final result
 	result.parentSize = 0;
 	result.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	strcpy(result.childName, input_dir_name);
-	traverseDirectory(&result);
+	
+	pthread_create(&tid, NULL, traverseDirectory, ((void *) &result));
+	pthread_join(tid, NULL);
 	printf("\nTotal Size: %d\n", result.parentSize);
 	
 	free(input_dir_name);
