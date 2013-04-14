@@ -27,8 +27,7 @@
 #define NAMESIZE 256
 #define NUM_THREADS 100
 #define DEBUG	
-// This a recursive function to process the thing
-
+// tData is used to pass data to and from threads
 typedef struct tData
 {
 	int parentSize;
@@ -80,7 +79,6 @@ void traverseDirectory(void * input)
 	#ifdef DEBUG
 	printf("DEBUG: %s/ %d\n", parData->childName, myData.parentSize);
 	#endif
-	
 	parData->parentSize += myData.parentSize;
 	return;
 }
@@ -112,14 +110,13 @@ int main(int argc, char *argv[])
 		printf("\nThe directory name is not valid. Directory does not exist\n");
 		exit(1);
 	}
-	
 	/****************************************************************************/
 	result.parentSize = 0;
 	result.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	strcpy(result.childName, input_dir_name);
 	traverseDirectory(&result);
 	printf("\nTotal Size: %d\n", result.parentSize);
-
+	
 	free(input_dir_name);
 	free(mydirpath);
 	return 0;
