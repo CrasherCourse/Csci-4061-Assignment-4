@@ -34,12 +34,16 @@ typedef struct tData
 	char * childName;
 } tData;
 
+pthread_mutex_t nameTransferLock, sizeTransferLock;
+
 void * traverseDirectory(void * input)
 {
 	DIR * dir;
 	struct dirent *dirEntry;
 	struct stat fileStat;
 	char *entryName;
+	void * thdRet;
+	int size = 0;
 	tData *parData, myData;
 	pthread_t tid;
 	
@@ -48,7 +52,6 @@ void * traverseDirectory(void * input)
 	parData = (tData *) input;
 	entryName = (char *) malloc(NAMESIZE * sizeof(char));
 
-	printf("%s\n", parData->childName);
 	if( (dir = opendir(parData->childName)) == NULL)
 	{
 		perror("opendir: ");
@@ -75,23 +78,26 @@ void * traverseDirectory(void * input)
 		}
 		else if(S_ISDIR(fileStat.st_mode))
 		{
+			strcpy(myData.childName, entryName);
 			pthread_create(&tid, NULL, traverseDirectory, ((void *) &myData));
-			pthread_join(tid, NULL);
+			pthread_join(tid, &thdRet);
+			size = *((int *) thdRet);
 		}
 	}
 	#ifdef DEBUG
 	printf("DEBUG: %s/ %d\n", parData->childName, myData.parentSize);
 	#endif
 	parData->parentSize += myData.parentSize;
-	pthread_exit((void *) result);
+	pthread_exit((void *) &parData->parentSize);
 }
 
 int main(int argc, char *argv[])
 {
 	char *input_dir_name, *mydirpath, *chptr;
+	int totalSize;
     struct stat statbuf;
 	pthread_t tid;
-	void * status;
+	void * status, *voidTotal;
 	tData result;
 
 	input_dir_name = (char *) malloc(NAMESIZE * sizeof(char));
@@ -120,8 +126,9 @@ int main(int argc, char *argv[])
 	strcpy(result.childName, input_dir_name);
 	
 	pthread_create(&tid, NULL, traverseDirectory, ((void *) &result));
-	pthread_join(tid, NULL);
-	printf("\nTotal Size: %d\n", result.parentSize);
+	pthread_join(tid, &voidTotal);
+	totalSize = *((int *) voidTotal);
+	printf("\nTotal Size: %d\n\n", totalSize);
 	
 	free(input_dir_name);
 	free(mydirpath);
