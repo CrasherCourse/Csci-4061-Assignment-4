@@ -35,16 +35,19 @@ typedef struct tData
 	char * childName;
 } tData;
 
-int traverseDirectory(char * dirName)
+void traverseDirectory(void * input)
 {
 	DIR * dir;
 	struct dirent *dir_entry;
 	struct stat fileStat;
 	char *entryName;
-	int size = 0;
-	
-	
-	if( (dir = opendir(dirName)) == NULL)
+	tData *parData, myData;
+	myData.parentSize = 0;
+	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
+	parData = (tData *) input;
+
+	printf("%s\n", parData->childName);
+	if( (dir = opendir(parData->childName)) == NULL)
 	{
 		perror("opendir: ");
 		exit(1);
@@ -53,7 +56,7 @@ int traverseDirectory(char * dirName)
 	while( (dir_entry = readdir(dir)) != NULL)
 	{
 		entryName = (char *) malloc(NAMESIZE * sizeof(char));
-		strcpy(entryName, dirName);
+		strcpy(entryName, parData->childName);
 		strcat(entryName, "/");
 		strcat(entryName, dir_entry->d_name);
 		
@@ -66,74 +69,29 @@ int traverseDirectory(char * dirName)
 		
 		if(S_ISREG(fileStat.st_mode))				// Add size of regular file to diretory size
 		{
-			size += fileStat.st_size;
+			myData.parentSize += fileStat.st_size;
 		}
 		else if(S_ISDIR(fileStat.st_mode))
 		{
-			size += traverseDirectory(entryName);
+			strcpy(myData.childName, entryName);
+			traverseDirectory((void *) &myData);
 		}
 	}
 	#ifdef DEBUG
-	printf("DEBUG: %s/ %d\n", dirName, size);
+	printf("DEBUG: %s/ %d\n", parData->childName, myData.parentSize);
 	#endif
-	return size;
-}
-
-void * travDirThread(void * input)
-{
-	DIR * dir;
-	struct dirent *dir_entry;
-	struct stat fileStat;
-	char *entryName, *dirName;
-	int size = 0;
-	pthread_t tid;
 	
-
-	dirName = (char *) input;
-	entryName = (char *) malloc(NAMESIZE * sizeof(char));
-	strcpy(entryName, dirName);
-	if( (dir = opendir(dirName)) == NULL)
-	{
-		perror("opendir: ");
-		exit(1);
-	}
-	
-	while( (dir_entry = readdir(dir)) != NULL)
-	{
-		entryName = (char *) malloc(NAMESIZE * sizeof(char));
-		strcpy(entryName, dirName);
-		strcat(entryName, "/");
-		strcat(entryName, dir_entry->d_name);
-		
-		if((strcmp(dir_entry->d_name, ".") == 0) ||				// ignore current and parent directory
-			(strcmp(dir_entry->d_name, "..") == 0))	continue;
-		if((lstat(entryName, &fileStat)) == -1)
-		{
-			perror("lstat: ");
-		}
-		
-		if(S_ISREG(fileStat.st_mode))				// Add size of regular file to diretory size
-		{
-			size += fileStat.st_size;
-		}
-		else if(S_ISDIR(fileStat.st_mode))
-		{
-			//size += traverseDirectory(entryName);
-		}
-	}
-	#ifdef DEBUG
-	printf("DEBUG: %s/ %d\n", dirName, size);
-	#endif
-	pthread_exit((void *) size);
+	parData->parentSize += myData.parentSize;
+	return;
 }
 
 int main(int argc, char *argv[])
 {
 	char *input_dir_name, *mydirpath, *chptr;
     struct stat statbuf;
-	int totalSize;
 	pthread_t tid;
 	void * status;
+	tData result;
 
 	input_dir_name = (char *) malloc(NAMESIZE * sizeof(char));
 	mydirpath = (char *) malloc(NAMESIZE * sizeof(char));
@@ -156,10 +114,11 @@ int main(int argc, char *argv[])
 	}
 	
 	/****************************************************************************/
-	pthread_create(&tid, NULL, travDirThread, (void *) input_dir_name);
-	pthread_join(tid, status);
-	totalSize = 0;
-	printf("\nTotal Size: %d\n", totalSize);
+	result.parentSize = 0;
+	result.childName = (char *) malloc(NAMESIZE * sizeof(char));
+	strcpy(result.childName, input_dir_name);
+	traverseDirectory(&result);
+	printf("\nTotal Size: %d\n", result.parentSize);
 
 	free(input_dir_name);
 	free(mydirpath);
