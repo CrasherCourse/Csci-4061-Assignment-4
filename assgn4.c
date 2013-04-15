@@ -36,6 +36,7 @@ typedef struct tData
 
 pthread_mutex_t nameTransferLock, sizeTransferLock;
 
+// This is the Thread function
 void * traverseDirectory(void * input)
 {
 	DIR * dir;
@@ -49,16 +50,16 @@ void * traverseDirectory(void * input)
 	
 	myData.parentSize = 0;		// initilize myData
 	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
-	parData = (tData *) input;
+	parData = (tData *) input;	
 	entryName = (char *) malloc(NAMESIZE * sizeof(char));
 
-	if( (dir = opendir(parData->childName)) == NULL)
+	if( (dir = opendir(parData->childName)) == NULL)		// open the directory
 	{
 		perror("opendir: ");
 		exit(1);
 	}
 	
-	while( (dirEntry = readdir(dir)) != NULL)
+	while( (dirEntry = readdir(dir)) != NULL)				// Read an entry from the directory
 	{
 
 		strcpy(entryName, parData->childName);
@@ -76,7 +77,7 @@ void * traverseDirectory(void * input)
 		{
 			myData.parentSize += fileStat.st_size;
 		}
-		else if(S_ISDIR(fileStat.st_mode))
+		else if(S_ISDIR(fileStat.st_mode))			// Create a new thread for the subdirectory
 		{
 			strcpy(myData.childName, entryName);
 			pthread_create(&tid, NULL, traverseDirectory, ((void *) &myData));
@@ -100,6 +101,8 @@ int main(int argc, char *argv[])
 	void * status, *voidTotal;
 	tData result;
 
+	pthread_mutex_init(&nameTransferLock, NULL);
+	pthread_mutex_init(&sizeTransferLock, NULL);
 	input_dir_name = (char *) malloc(NAMESIZE * sizeof(char));
 	mydirpath = (char *) malloc(NAMESIZE * sizeof(char));
 	printf("\n");
