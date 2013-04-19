@@ -60,7 +60,7 @@ void * traverseDirectory(void * input)
 	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	entryName = (char *) malloc(NAMESIZE * sizeof(char));
 
-	if( (dir = opendir(parData->childName)) == NULL)		// open the directory
+	if( (dir = opendir(dirName)) == NULL)		// open the directory
 	{
 		perror("opendir: ");
 		exit(1);
