@@ -34,33 +34,47 @@ typedef struct tData
 	char * childName;
 } tData;
 
-void traverseDirectory(void * input)
+pthread_mutex_t nameTransferLock, sizeTransferLock;
+int firstThread;
+
+// This is the Thread function
+void * traverseDirectory(void * input)
 {
 	DIR * dir;
-	struct dirent *dir_entry;
+	struct dirent *dirEntry;
 	struct stat fileStat;
-	char *entryName;
+	char *entryName, *dirName;
+	void * thdRet;
+	int i = 0, tIndex = 0;
 	tData *parData, myData;
-	myData.parentSize = 0;
-	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
-	parData = (tData *) input;
+	pthread_t tid[NUM_THREADS];
+	
+	
+	parData = (tData *) input;			// make a tData pointer out of the input
+	dirName = (char *) malloc(NAMESIZE * sizeof(char));		// save a string of the current directory
+	strcpy(dirName, parData->childName);
+	if(firstThread) firstThread = 0;	// unlock name transfer mutex if not the first thread
+	else pthread_mutex_unlock(&nameTransferLock);
 
-	printf("%s\n", parData->childName);
-	if( (dir = opendir(parData->childName)) == NULL)
+	myData.parentSize = 0;		// initilize myData
+	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
+	entryName = (char *) malloc(NAMESIZE * sizeof(char));
+
+	if( (dir = opendir(dirName)) == NULL)		// open the directory
 	{
 		perror("opendir: ");
 		exit(1);
 	}
 	
-	while( (dir_entry = readdir(dir)) != NULL)
+	while( (dirEntry = readdir(dir)) != NULL)				// Read an entry from the directory
 	{
-		entryName = (char *) malloc(NAMESIZE * sizeof(char));
-		strcpy(entryName, parData->childName);
+
+		strcpy(entryName, dirName);
 		strcat(entryName, "/");
-		strcat(entryName, dir_entry->d_name);
+		strcat(entryName, dirEntry->d_name);
 		
-		if((strcmp(dir_entry->d_name, ".") == 0) ||				// ignore current and parent directory
-			(strcmp(dir_entry->d_name, "..") == 0))	continue;
+		if((strcmp(dirEntry->d_name, ".") == 0) ||				// ignore current and parent directory
+			(strcmp(dirEntry->d_name, "..") == 0))	continue;
 		if((lstat(entryName, &fileStat)) == -1)
 		{
 			perror("lstat: ");
@@ -70,27 +84,44 @@ void traverseDirectory(void * input)
 		{
 			myData.parentSize += fileStat.st_size;
 		}
-		else if(S_ISDIR(fileStat.st_mode))
+		else if(S_ISDIR(fileStat.st_mode))			// Create a new thread for the subdirectory
 		{
+			pthread_mutex_lock(&nameTransferLock);
 			strcpy(myData.childName, entryName);
-			traverseDirectory((void *) &myData);
+			pthread_create(&tid[tIndex], NULL, traverseDirectory, ((void *) &myData));
+			tIndex++;
 		}
 	}
+	
+	// wait for child threads to return
+	for(i = 0; i < tIndex; i++)
+	{
+		pthread_join(tid[i], NULL);
+	}
 	#ifdef DEBUG
-	printf("DEBUG: %s/ %d\n", parData->childName, myData.parentSize);
+	printf("DEBUG: %s/ %d\n", dirName, myData.parentSize);
 	#endif
+	
+	free(dirName);
+	free(myData.childName);
+	free(entryName);
+	pthread_mutex_lock(&sizeTransferLock);
 	parData->parentSize += myData.parentSize;
-	return;
+	pthread_mutex_unlock(&sizeTransferLock);
+	pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[])
 {
 	char *input_dir_name, *mydirpath, *chptr;
+	int totalSize;
     struct stat statbuf;
 	pthread_t tid;
-	void * status;
+	void * status, *voidTotal;
 	tData result;
 
+	pthread_mutex_init(&nameTransferLock, NULL);
+	pthread_mutex_init(&sizeTransferLock, NULL);
 	input_dir_name = (char *) malloc(NAMESIZE * sizeof(char));
 	mydirpath = (char *) malloc(NAMESIZE * sizeof(char));
 	printf("\n");
@@ -111,11 +142,16 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	/****************************************************************************/
+	// Initialize tData for final result
 	result.parentSize = 0;
 	result.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	strcpy(result.childName, input_dir_name);
-	traverseDirectory(&result);
-	printf("\nTotal Size: %d\n", result.parentSize);
+	firstThread = 1;
+	
+	pthread_create(&tid, NULL, traverseDirectory, ((void *) &result));
+	pthread_join(tid, &voidTotal);
+	//totalSize = *((int *) voidTotal);
+	printf("\nTotal Size: %d\n\n", result.parentSize);
 	
 	free(input_dir_name);
 	free(mydirpath);
