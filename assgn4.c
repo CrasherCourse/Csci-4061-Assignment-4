@@ -44,7 +44,6 @@ void * traverseDirectory(void * input)
 	struct dirent *dirEntry;
 	struct stat fileStat;
 	char *entryName, *dirName;
-	void * thdRet;
 	int i = 0, tIndex = 0;
 	tData *parData, myData;
 	pthread_t tid[NUM_THREADS];
@@ -60,7 +59,7 @@ void * traverseDirectory(void * input)
 	myData.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	entryName = (char *) malloc(NAMESIZE * sizeof(char));	
 
-	if( (dir = opendir(dirName)) == NULL)		// open the directory
+	if( (dir = opendir(dirName)) == NULL)					// open the directory
 	{
 		perror("opendir: ");
 		exit(1);
@@ -71,11 +70,11 @@ void * traverseDirectory(void * input)
 		if((strcmp(dirEntry->d_name, ".") == 0) ||				// ignore current and parent directory
 			(strcmp(dirEntry->d_name, "..") == 0))	continue;
 
-		strcpy(entryName, dirName);								// create a path to the currend dirEntry
+		strcpy(entryName, dirName);								// create a path to the current dirEntry
 		strcat(entryName, "/");
 		strcat(entryName, dirEntry->d_name);
 
-		if((lstat(entryName, &fileStat)) == -1)
+		if((lstat(entryName, &fileStat)) == -1)		// Make a lstat of the entryName
 		{
 			perror("lstat: ");
 		}
@@ -108,7 +107,7 @@ void * traverseDirectory(void * input)
 	free(dirName);									// Free up the malloc'd char*'s
 	free(myData.childName);
 	free(entryName);
-	pthread_exit(NULL);
+	pthread_exit(NULL);								// Exit thread
 }
 
 int main(int argc, char *argv[])
@@ -146,12 +145,11 @@ int main(int argc, char *argv[])
 	result.parentSize = 0;
 	result.childName = (char *) malloc(NAMESIZE * sizeof(char));
 	strcpy(result.childName, input_dir_name);
-	firstThread = 1;
+	firstThread = 1;			// Used to prevent signaling when there is no waiting
 	
-	pthread_create(&tid, NULL, traverseDirectory, ((void *) &result));
-	pthread_join(tid, &voidTotal);
-	//totalSize = *((int *) voidTotal);
-	printf("\nTotal Size: %d\n\n", result.parentSize);
+	pthread_create(&tid, NULL, traverseDirectory, ((void *) &result));	// Create the first thread
+	pthread_join(tid, NULL);
+	printf("\nTotal Size: %d\n\n", result.parentSize);					// Print out the total size
 	
 	free(input_dir_name);
 	free(mydirpath);
